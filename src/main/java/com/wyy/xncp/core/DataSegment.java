@@ -9,8 +9,8 @@ package com.wyy.xncp.core;
 public class DataSegment {
     private long conversationID ;//会话id 实际大小UInt32
     private byte command;//功能位 实际大小byte
-    private long fragmentID;//分片Id 实际大小UInt32
-    private long receiveWindowSize;//剩余接受窗口大小 实际大小UInt32
+    private byte fragmentID;//分片Id 实际大小byte
+    private long receiveWindowSize;//剩余接受窗口大小 实际大小UInt16 //这里的单位指的是包的个数而不是字节的个数
     private long timeStamp;//本消息发送的时候的时间戳 实际大小UInt32
     private long sn;//包序号 实际大小UInt32
     private long unAckID;//una，没有接收到的包id 一般指滑动窗口的左值 实际大小UInt32
@@ -33,6 +33,51 @@ public class DataSegment {
     public DataSegment(int size) {
         data = new byte[size];
     }
+
+
+    /**
+     * 给出data时的构造函数
+     * */
+    public DataSegment(byte []data){
+        this.data = data;
+    }
+
+    /**
+     * 将datasegment头部信息从loc位置开始写入buffer中
+     * 返回的是整体的长度
+     * */
+    public int encodeDataSegmentToBuffer(byte [] buffer ,int loc){
+
+        int begin = loc;
+
+        XncpTools.encodeUInt32(buffer,loc,conversationID);
+        loc+=4;
+
+        XncpTools.encodeByte(buffer,loc,command);
+        loc+=1;
+
+        XncpTools.encodeByte(buffer,loc,fragmentID);
+        loc+=1;
+
+        XncpTools.encodeUInt16(buffer,loc,(int)receiveWindowSize);
+        loc+=2;
+
+        XncpTools.encodeUInt32(buffer,loc,timeStamp);
+        loc+=4;
+
+        XncpTools.encodeUInt32(buffer,loc,sn);
+        loc+=4;
+
+        XncpTools.encodeUInt32(buffer,loc,unAckID);
+        loc+=4;
+
+        XncpTools.encodeUInt32(buffer,loc,data.length);//这里原版的实现是转化成了long，暂时不知道为什么
+        loc+=4;
+
+        return loc-begin;
+    }
+
+
 
 
 
