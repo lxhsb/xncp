@@ -77,6 +77,10 @@ public class DataSegment {
         return loc-begin;
     }
 
+    public void release(){
+        this.data = null;//为了通用，留出一个release方法，这个方法在java中的应用不是很大(基本没用)
+    }
+
 
 
 
