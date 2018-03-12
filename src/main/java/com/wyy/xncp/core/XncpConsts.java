@@ -6,5 +6,7 @@ package com.wyy.xncp.core;
  * */
 public class XncpConsts {
 
+    public static int DATASEGMENT_HEADER_SIZE = 24;
+
 
 }
