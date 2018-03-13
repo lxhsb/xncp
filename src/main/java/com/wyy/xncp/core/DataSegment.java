@@ -18,6 +18,7 @@ public class DataSegment {
     private long rto;//这个分片的超时重传等待时间 实际大小UInt32
     private long sendCount;//这个分片被发送的次数 实际大小UInt32
     private long jumpCount;//收到ack时，这个分片被跳过的次数 实际大小UInt32
+    private long dataLength;//data 的长度
     private byte[] data;//数据
 
 
@@ -32,6 +33,7 @@ public class DataSegment {
      * */
     public DataSegment(int size) {
         data = new byte[size];
+        this.dataLength = (long) data.length;
     }
 
 
@@ -40,6 +42,7 @@ public class DataSegment {
      * */
     public DataSegment(byte []data){
         this.data = data;
+        this.dataLength = (long)data.length;
     }
 
     /**
@@ -79,13 +82,110 @@ public class DataSegment {
 
     public void release(){
         this.data = null;//为了通用，留出一个release方法，这个方法在java中的应用不是很大(基本没用)
+        this.dataLength = 0 ;
     }
 
+    public long getConversationID() {
+        return conversationID;
+    }
 
+    public void setConversationID(long conversationID) {
+        this.conversationID = conversationID;
+    }
 
+    public byte getCommand() {
+        return command;
+    }
 
+    public void setCommand(byte command) {
+        this.command = command;
+    }
 
+    public byte getFragmentID() {
+        return fragmentID;
+    }
 
+    public void setFragmentID(byte fragmentID) {
+        this.fragmentID = fragmentID;
+    }
 
+    public long getReceiveWindowSize() {
+        return receiveWindowSize;
+    }
 
+    public void setReceiveWindowSize(long receiveWindowSize) {
+        this.receiveWindowSize = receiveWindowSize;
+    }
+
+    public long getTimeStamp() {
+        return timeStamp;
+    }
+
+    public void setTimeStamp(long timeStamp) {
+        this.timeStamp = timeStamp;
+    }
+
+    public long getSn() {
+        return sn;
+    }
+
+    public void setSn(long sn) {
+        this.sn = sn;
+    }
+
+    public long getUnAckID() {
+        return unAckID;
+    }
+
+    public void setUnAckID(long unAckID) {
+        this.unAckID = unAckID;
+    }
+
+    public long getResendTimeStamp() {
+        return resendTimeStamp;
+    }
+
+    public void setResendTimeStamp(long resendTimeStamp) {
+        this.resendTimeStamp = resendTimeStamp;
+    }
+
+    public long getRto() {
+        return rto;
+    }
+
+    public void setRto(long rto) {
+        this.rto = rto;
+    }
+
+    public long getSendCount() {
+        return sendCount;
+    }
+
+    public void setSendCount(long sendCount) {
+        this.sendCount = sendCount;
+    }
+
+    public long getJumpCount() {
+        return jumpCount;
+    }
+
+    public void setJumpCount(long jumpCount) {
+        this.jumpCount = jumpCount;
+    }
+
+    public long getDataLength() {
+        return dataLength;
+    }
+
+    public void setDataLength(long dataLength) {
+        this.dataLength = dataLength;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
+    }
 }
