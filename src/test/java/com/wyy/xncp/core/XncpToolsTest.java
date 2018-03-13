@@ -84,6 +84,15 @@ public class XncpToolsTest {
 
 
     }
+    @Test
+    public void testIsEmpty(){
+        byte []buffer=null;
+        assertEquals(true,XncpTools.isEmpty(buffer));
+        buffer = new byte[0];
+        assertEquals(true,XncpTools.isEmpty(buffer));
+        buffer = new byte[1];
+        assertEquals(false,XncpTools.isEmpty(buffer));
+    }
 
 
 

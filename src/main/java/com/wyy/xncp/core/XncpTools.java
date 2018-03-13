@@ -71,4 +71,11 @@ public class XncpTools {
         return ans ;
 
     }
+
+    /**
+     * 判断一个字节数组是否为空
+     * */
+    public static boolean isEmpty(byte []buffer){
+        return (buffer == null || buffer.length == 0);
+    }
 }
