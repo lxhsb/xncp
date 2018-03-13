@@ -32,7 +32,7 @@ public class DataSegment {
      * 给出size时的构造函数
      * */
     public DataSegment(int size) {
-        data = new byte[size];
+        this.data = new byte[size];
         this.dataLength = (long) data.length;
     }
 
@@ -44,6 +44,19 @@ public class DataSegment {
         this.data = data;
         this.dataLength = (long)data.length;
     }
+
+
+    /**
+     * 给出data时更严格一些的构造函数
+     * 从原字节数组data中的loc位置开始len个字节来构造
+     * */
+    public DataSegment(byte[] data,int startLoc,int len){
+        this.data = new byte[len];
+        this.dataLength  = (long)data.length;
+        System.arraycopy(data,startLoc,this.data,0,len);
+    }
+
+
 
     /**
      * 将datasegment头部信息从loc位置开始写入buffer中
