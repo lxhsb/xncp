@@ -12,7 +12,8 @@ public abstract class Xncp {
     private long mss;//mss = mtu-headerLength
     private long sendWindowSize ;//发送窗口大小
     private long receiveWindowSize ;//接收窗口大小
-
+    private long receiveNextID;//下一个待接收的包序号 sn
+    private boolean needSendReceiveWindowSize;//需要给对端主动发送窗口大小
 
     private LinkedList<DataSegment>sendQueue = new LinkedList<DataSegment>();//发送队列
     private LinkedList<DataSegment>sendBuff = new LinkedList<DataSegment>();//发送缓存，一般指发送窗口
@@ -97,7 +98,7 @@ public abstract class Xncp {
            dataSegment.setFragmentID((byte)i);
            loc+=size;
            len-=size;
-           this.sendQueue.add(dataSegment);
+           this.sendQueue.add(dataSegment);//编号问题由再底层来解决
        }
        return 0 ;//正常结束
     }
@@ -175,6 +176,98 @@ public abstract class Xncp {
         if(receiveWindowSize>0){
             this.receiveWindowSize = receiveWindowSize;
         }
+
+    }
+    /**
+     * 上层接收数据时调用
+     *
+     * @return -1 没有数据
+     * @return -2 在获取可读字节数时出错
+     * @return -3 传递来的buffer存不下
+     * @return -4 读取的数据长度和getReadableBytesSize中估计的不一样，原因未知
+     * */
+    public int receive(byte []buffer){
+        if(receiveQueue.isEmpty()){
+            return -1;
+        }
+        long readableBytesSize = getReadableBytesSize();//len指的是可读的字节数
+        int cnt = 0 ;//指的是包的个数
+        int loc = 0 ;//位移量
+        long len = 0 ;//用来记录读了多少字节 主要功能是用来校验 和上面的loc功能上不同，但是实际上保持一致，主要为了保证代码的可读性
+
+        boolean needRecover = receiveQueue.size()>=receiveWindowSize;//这里如果出现这种情况，那么对端就不会再发送数据过来，在给上层传递过数据包后视情况给对端传递恢复包
+
+        if(readableBytesSize<0){
+            return -2;
+        }
+        if(readableBytesSize<buffer.length){
+            return -3;
+        }
+        for(DataSegment dataSegment:this.receiveQueue){
+            len += dataSegment.getDataLength();
+
+            System.arraycopy(dataSegment.getData(),0,buffer,loc,(int) dataSegment.getDataLength());
+
+            loc += dataSegment.getDataLength();
+
+            cnt++;
+
+            if(dataSegment.getFragmentID() == 0 ){//当前消息已经读完了
+                break;
+            }
+
+        }
+        if(len != readableBytesSize){
+            return -4;
+        }
+
+        //如果读取数据没有什么问题的话
+        //将已经读完的从接收队列中取出
+        for(int i = 0 ;i<cnt;i++){
+            DataSegment dataSegment = this.receiveQueue.element();
+            dataSegment.release();//显式的调用一下析构函数，虽然这在这里没有什么用
+            this.receiveQueue.remove(0);//从队列中移除
+        }
+        updateReceive(needRecover);
+
+        return (int)len;
+    }
+
+    /**
+     * 将receiveBuff中的符合要求的数据包放到receiveQueue中
+     * 符合要求是指dataSegment.sn == receiveNextID
+     * @param needRecover 是否需要恢复
+     * 具体恢复是和实际情况有关
+     * */
+    private void updateReceive(boolean needRecover){
+        int cnt  = 0 ;
+        for(DataSegment dataSegment:receiveBuff){// todo 这有一个坑点，以后填,现在想的是底层来解决
+            if(dataSegment.getSn() == receiveNextID&&this.receiveQueue.size()< receiveWindowSize){
+                cnt++;
+                this.receiveQueue.add(dataSegment);
+                receiveNextID++;// todo 这有一个序号回绕溢出问题，待填
+            }else {
+                break;
+            }
+        }
+        for(int i = 0 ;i<cnt;i++){
+            this.receiveBuff.remove(0);
+        }
+        if(receiveQueue.size()<receiveWindowSize&&needRecover){
+
+            needSendReceiveWindowSize = true;
+        }
+
+    }
+
+    /**
+     * 获取剩余接收窗口大小
+     * 单位 包
+     * */
+    private long getAvaliableReceiveWindowSize(){
+
+        long res = receiveWindowSize - this.receiveQueue.size();
+        return res>=0?res:0;
 
     }
 }
