@@ -14,6 +14,9 @@ public abstract class Xncp {
     private long receiveWindowSize ;//接收窗口大小
     private long receiveNextID;//下一个待接收的包序号 sn
     private boolean needSendReceiveWindowSize;//需要给对端主动发送窗口大小
+    private long sendUnAckID ;//发送之后还没接受到ack的包序号
+    private long sendNextID;//下一个待发送的包的序号
+
 
     private LinkedList<DataSegment>sendQueue = new LinkedList<DataSegment>();//发送队列
     private LinkedList<DataSegment>sendBuff = new LinkedList<DataSegment>();//发送缓存，一般指发送窗口
@@ -22,6 +25,7 @@ public abstract class Xncp {
     private LinkedList<DataSegment>receiveBuff = new LinkedList<DataSegment>();//接收缓存，一般指接收窗口
 
     private LinkedList<Long>ackList = new LinkedList<Long>();//接收到的ack，这里暂时先使用链表来实现，缺点是下标访问时的时间复杂度为O（n）
+    private LinkedList<Long>timeStampList = new LinkedList<Long>();//接收到的包的时间序列，同上
 
 
     public abstract void output(byte[]buffer);//这个是整个Xncp协议中唯一不实现的地方，在发送时交给用户自己来实现
@@ -226,7 +230,7 @@ public abstract class Xncp {
         for(int i = 0 ;i<cnt;i++){
             DataSegment dataSegment = this.receiveQueue.element();
             dataSegment.release();//显式的调用一下析构函数，虽然这在这里没有什么用
-            this.receiveQueue.remove(0);//从队列中移除
+            this.receiveQueue.removeFirst();//从队列中移除
         }
         updateReceive(needRecover);
 
@@ -251,7 +255,7 @@ public abstract class Xncp {
             }
         }
         for(int i = 0 ;i<cnt;i++){
-            this.receiveBuff.remove(0);
+            this.receiveBuff.removeFirst();
         }
         if(receiveQueue.size()<receiveWindowSize&&needRecover){
 
@@ -270,4 +274,87 @@ public abstract class Xncp {
         return res>=0?res:0;
 
     }
+
+    /**
+     * 更新sendUnAckID
+     * */
+    private void updateSendUnAckID(){
+
+        sendUnAckID = sendNextID;//默认情况
+
+        if(!sendBuff.isEmpty()){//如果发送缓存不为空，那么就更新成发送缓存中的第一个包的序号
+
+            sendUnAckID = sendBuff.getFirst().getSn();
+
+        }
+    }
+
+    /**
+     * 根据对端传回来的Ack包序号来删除对应本地包，类似选择确认
+     * 同时将被跳过的包增加被跳过的次数
+     * */
+    private void updateByAckID(long sn){
+
+        if(sn<this.sendUnAckID){
+            return;
+        }
+        if(sn>=this.sendNextID){
+            return;
+        }
+
+        int loc = 0 ;
+        for(DataSegment dataSegment:this.sendBuff){
+            if(dataSegment.getSn() == sn){
+                this.sendBuff.remove(loc);
+                break;
+            }
+
+            loc++;
+
+            if(sn < dataSegment.getSn()){//特殊情况考虑一下
+
+                break;
+
+            }
+
+            dataSegment.increaseJumpCount();//被跳过
+
+        }
+
+
+
+    }
+
+    /**
+     * 根据对端传来的una来批量删除本地的包
+     * 当调用此方法时，会将发送缓存中所有sn小于unAckID的包全部删除
+     * */
+    private void updateByUnAckID(long unAckID){
+
+        int cnt = 0 ;
+
+        for(DataSegment dataSegment:this.sendBuff){
+
+            if(dataSegment.getSn()<unAckID){
+
+                cnt++;
+
+            }else {
+
+                break;
+            }
+        }
+
+        for(int i = 0;i < cnt ; i++){
+
+            this.sendBuff.removeFirst();
+
+        }
+
+    }
+
+
+
+
+
 }
