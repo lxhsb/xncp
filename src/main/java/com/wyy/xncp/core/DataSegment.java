@@ -201,4 +201,8 @@ public class DataSegment {
     public void setData(byte[] data) {
         this.data = data;
     }
+
+    public void increaseJumpCount(){
+        this.jumpCount++;
+    }
 }
