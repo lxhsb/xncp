@@ -8,6 +8,9 @@ import java.util.LinkedList;
  * */
 public abstract class Xncp {
 
+
+
+    private long conversationID;
     private long mtu;
     private long mss;//mss = mtu-headerLength
     private long sendWindowSize ;//发送窗口大小
@@ -28,7 +31,7 @@ public abstract class Xncp {
     private LinkedList<Integer>timeStampList = new LinkedList<Integer>();//接收到的包的时间序列，同上
 
 
-    public abstract void output(byte[]buffer);//这个是整个Xncp协议中唯一不实现的地方，在发送时交给用户自己来实现
+    public abstract void output(byte[]buffer,int st,int ed);//这个是整个Xncp协议中唯一不实现的地方，在发送时交给用户自己来实现
 
     /**
      * getReadableBytesSize
@@ -429,6 +432,60 @@ public abstract class Xncp {
             receiveBuff.removeFirst();
         }
 
+
+    }
+
+    /**
+     * 获取一个临时可使用的byte buffer[]
+     * 大小为2*mtu
+     * */
+    private byte[] getBuffer(){
+        byte [] buffer = new byte[(int)getMtu()*3];
+        return buffer;
+    }
+    /**
+     * 将本地已经接受到的包发送ack给对面
+     * */
+    private void flushAck() throws Exception{
+        if(ackList.size()!=timeStampList.size()){
+            //能出现这一步的问题说明代码有bug，在后期会考虑把这一步去掉
+            throw new Exception("ackListSize is not equal to timeStampList");
+        }
+
+        byte [] buffer = getBuffer();//这里可能也会报错,其实也应该抛异常的
+        DataSegment dataSegment = new DataSegment(0);
+        dataSegment.setConversationID(conversationID);
+        dataSegment.setCommand(XncpConsts.COMMAND_ACK);
+        dataSegment.setUnAckID(this.receiveNextID);
+        dataSegment.setReceiveWindowSize(getAvaliableReceiveWindowSize());
+        int loc = 0 ;
+        for(int i = 0 ;i<ackList.size();i++){
+            dataSegment.setSn(ackList.get(i));
+            dataSegment.setTimeStamp(timeStampList.get(i));
+            loc+=dataSegment.encodeDataSegmentToBuffer(buffer,loc);
+            if(loc+XncpConsts.DATASEGMENT_HEADER_SIZE>getMss()){
+                output(buffer,0,loc);
+                loc = 0 ;
+            }
+        }
+        //如果能走到这里应该是没有什么问题的
+        ackList.clear();
+        timeStampList.clear();
+    }
+
+    /**
+     * 主动发送本地的接受窗口大小给对面
+     * 当且仅当需要恢复的时候才会发送
+     * */
+    private void sendWindowSize(){
+
+    }
+
+    /**
+     * 主动请求对面的窗口大小
+     * 当且仅当满足条件的时候才会发送
+     * */
+    private void sendAskWindowSize(){
 
     }
 
