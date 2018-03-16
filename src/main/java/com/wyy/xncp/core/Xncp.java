@@ -25,7 +25,7 @@ public abstract class Xncp {
     private LinkedList<DataSegment>receiveBuff = new LinkedList<DataSegment>();//接收缓存，一般指接收窗口
 
     private LinkedList<Long>ackList = new LinkedList<Long>();//接收到的ack，这里暂时先使用链表来实现，缺点是下标访问时的时间复杂度为O（n）
-    private LinkedList<Long>timeStampList = new LinkedList<Long>();//接收到的包的时间序列，同上
+    private LinkedList<Integer>timeStampList = new LinkedList<Integer>();//接收到的包的时间序列，同上
 
 
     public abstract void output(byte[]buffer);//这个是整个Xncp协议中唯一不实现的地方，在发送时交给用户自己来实现
@@ -352,6 +352,87 @@ public abstract class Xncp {
         }
 
     }
+
+    /**
+     * 接收到了一个包，将对应的ack放入ackList中
+     * */
+    private void addAck(long sn){
+        this.ackList.add(sn);
+    }
+
+    /**
+     * 接收到了一个包，将对应的时间放入timeStampList中
+     * */
+    private void addTimeStamp(int timeStamp){
+        this.timeStampList.add(timeStamp);
+    }
+
+
+
+    /**
+     * 当底层接收到一个包之后调用这个方法
+     * 感觉略麻烦，待填
+     * */
+    public int input(byte [] buffer){
+        return 0;
+    }
+
+    /**
+     * 底层收包之后调用这个方法，更新相应的信息
+     * todo  可能会有bug，待测试！！！！！！
+     * */
+
+    private void handleDataSegment(DataSegment dataSegment){
+
+        if(dataSegment.getSn()>receiveNextID+receiveWindowSize){//超出滑动窗口的右边
+            return;
+        }
+        if(dataSegment.getSn()<receiveNextID){//超出滑动窗口的左区间
+            return;
+        }
+        boolean flag = false;//这个flag是判读这个包是否已经有了
+
+        int loc = -1 ;//计算插入位置
+        for(int i = 0 ;i<sendBuff.size();i++){//将包插进对应的地方，写到这里逻辑有点混乱
+            DataSegment tmp = sendBuff.get(i);
+
+            if(tmp.getSn() == dataSegment.getSn()){//重复了
+                flag = true;
+                break;
+            }
+            else if(dataSegment.getSn()>tmp.getSn()){
+                //说明该包可以插到tmp包后面
+                loc++;
+            }else {
+                break;
+            }
+        }
+        if(!flag){//包不是重复的
+
+            if(loc == sendBuff.size()){
+                sendBuff.add(dataSegment);
+            }else {
+                sendBuff.add(loc+1,dataSegment);
+            }
+        }
+
+        int cnt = 0 ;
+        for(DataSegment tmp : sendBuff){
+            if(receiveQueue.size()<receiveWindowSize&&tmp.getSn() == receiveNextID){
+                receiveQueue.add(tmp);
+                receiveNextID++;
+                //receiveWindowSize--;
+                cnt++;
+            }
+        }
+        for(int i = 0 ;i<cnt;i++){
+            receiveBuff.removeFirst();
+        }
+
+
+    }
+
+
 
 
 
