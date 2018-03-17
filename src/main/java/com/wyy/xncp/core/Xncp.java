@@ -18,7 +18,17 @@ public abstract class Xncp {
     private long receiveNextID;//下一个待接收的包序号 sn
     private boolean needSendReceiveWindowSize;//需要给对端主动发送窗口大小
     private long sendUnAckID ;//发送之后还没接受到ack的包序号
-    private long sendNextID;//下一个待发送的包的序号
+    private long sendNextID;//下一个待发送的包的序号、
+    private long remoteWindowSize;
+    private boolean neendControl;//需要拥塞控制
+    private long controlSendWindowSize ; //拥塞控制时的窗口大小
+    private long currentTime;//现在时间
+    private long rto ;//超时重传时间
+    private long minRto;//最小超时重传时间
+    private long rtt ;//ack接收rtt浮动值
+    private long rttVal;//ack接收rtt静态值
+
+
 
 
     private LinkedList<DataSegment>sendQueue = new LinkedList<DataSegment>();//发送队列
@@ -478,6 +488,19 @@ public abstract class Xncp {
      * 当且仅当需要恢复的时候才会发送
      * */
     private void sendWindowSize(){
+        if(needSendReceiveWindowSize){
+            byte []buffer = getBuffer();
+            DataSegment dataSegment = new DataSegment(0);
+            dataSegment.setConversationID(conversationID);
+            dataSegment.setCommand(XncpConsts.COMMAND_TELL_WINDOW_SIZE);
+            dataSegment.setUnAckID(receiveNextID);
+            dataSegment.setReceiveWindowSize(getAvaliableReceiveWindowSize());
+            dataSegment.setReceiveWindowSize(getAvaliableReceiveWindowSize());
+            int ed = dataSegment.encodeDataSegmentToBuffer(buffer,0);
+            output(buffer,0,ed);
+            needSendReceiveWindowSize = false;
+        }
+
 
     }
 
@@ -486,6 +509,43 @@ public abstract class Xncp {
      * 当且仅当满足条件的时候才会发送
      * */
     private void sendAskWindowSize(){
+
+    }
+
+    /**
+     * 将发送队列中的数据放到发送缓存中
+     * */
+    private void updateSend(){
+        long size  = Math.min(sendWindowSize,remoteWindowSize);
+        if(neendControl){
+            size = Math.min(size,controlSendWindowSize);
+        }
+        int cnt = 0 ;
+        for(DataSegment dataSegment:sendQueue){
+            if(sendNextID>=sendUnAckID+size){
+                break;
+            }
+            dataSegment.setConversationID(conversationID);
+            dataSegment.setCommand(XncpConsts.COMMAND_DATA);
+            dataSegment.setTimeStamp(currentTime);
+            dataSegment.setSn(sendNextID++);
+            dataSegment.setUnAckID(receiveNextID);
+            dataSegment.setRto(rto);
+            dataSegment.setJumpCount(0);
+            dataSegment.setSendCount(0);
+            sendBuff.add(dataSegment);
+            sendNextID++;
+            cnt++;
+        }
+        for(int i = 0 ;i<cnt;i++){
+            sendQueue.removeFirst();
+        }
+    }
+    /**
+     * 真正带有发送功能的方法
+     * */
+    private void flushSendBuffer(){
+
 
     }
 
