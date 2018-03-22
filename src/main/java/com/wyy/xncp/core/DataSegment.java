@@ -205,4 +205,8 @@ public class DataSegment {
     public void increaseJumpCount(){
         this.jumpCount++;
     }
+
+    public void increaseSendCount(){
+        this.sendCount++;
+    }
 }
