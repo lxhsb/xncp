@@ -11,6 +11,7 @@ public class XncpConsts {
     public static byte COMMAND_DATA = 1;//这个包的功能是发送数据
     public static byte COMMAND_TELL_WINDOW_SIZE = 2;//这个包的功能是在恢复后告诉对面自己的接受窗口
     public static byte COMMAND_ASK_WINDOW_SIZE = 3;//主动询问对面的窗口大小
+    public static long SSTHRESH_MIN = 2;
 
 
 }

@@ -27,6 +27,12 @@ public abstract class Xncp {
     private long minRto;//最小超时重传时间
     private long rtt ;//ack接收rtt浮动值
     private long rttVal;//ack接收rtt静态值
+    private int fastResendCount;//快速重传阈值
+    private boolean noDelay;//无延迟模式
+    private int xncpState;//整体状态标识
+    private int maxSendCount;//最多发送次数，当一个包发送次数大于这个值时，说明连接不通
+    private long ssthresh;//拥塞避免阈值
+    private long increase;//拥塞窗口的增长量
 
 
 
@@ -543,9 +549,89 @@ public abstract class Xncp {
     }
     /**
      * 真正带有发送功能的方法
+     * 同时会更新ssthresh
      * */
     private void flushSendBuffer(){
 
+        int loc = 0 ;
+        byte []buffer = getBuffer();
+        boolean lost = false;//是否丢包
+        boolean fastResend = false;//是否快重传
+
+        int realFastResendCount = fastResendCount>0?fastResendCount:Integer.MAX_VALUE;
+
+        long minRto = !noDelay?(rto>>3):0;
+
+        for(DataSegment dataSegment:sendBuff){
+            boolean flag = false;
+
+            if(dataSegment.getSendCount() == 0 ){
+                //说明是第一次传输
+                flag = true;
+                dataSegment.increaseSendCount();
+                dataSegment.setRto(this.rto);
+                dataSegment.setResendTimeStamp(currentTime+dataSegment.getRto()+minRto);
+            }else if(currentTime>=dataSegment.getResendTimeStamp()){
+                //超时重传,或者丢包
+                flag = true;
+                dataSegment.increaseSendCount();
+                dataSegment.setRto(noDelay?dataSegment.getRto()+minRto/2:dataSegment.getRto()+minRto);
+                dataSegment.setResendTimeStamp(currentTime+dataSegment.getRto());
+                lost = true;
+            }else if(dataSegment.getJumpCount()>=realFastResendCount){
+                //快重传
+                flag = true;
+                dataSegment.increaseSendCount();
+                dataSegment.setJumpCount(0);
+                dataSegment.setResendTimeStamp(currentTime+dataSegment.getRto());
+                fastResend = true;
+            }
+
+            if(flag){
+                //需要发送
+                dataSegment.setTimeStamp(currentTime);
+                dataSegment.setReceiveWindowSize(getAvaliableReceiveWindowSize());
+                dataSegment.setUnAckID(receiveNextID);
+
+                long tmp = XncpConsts.DATASEGMENT_HEADER_SIZE+dataSegment.getDataLength();
+                if(tmp+loc>=getMtu()){
+                    output(buffer,0,loc);
+                    loc = 0 ;
+                }
+                loc+=dataSegment.encodeDataSegmentToBuffer(buffer,loc);
+                if(!XncpTools.isEmpty(dataSegment.getData())){
+                    System.arraycopy(dataSegment.getData(),0,buffer,loc,(int) dataSegment.getDataLength());
+                    loc+=dataSegment.getDataLength();
+                }
+                if(dataSegment.getSendCount() >= maxSendCount){
+                    xncpState = -1;
+                }
+
+
+            }
+
+        }
+        if(loc!=0){
+            output(buffer,0,loc);
+            loc = 0 ;
+        }
+
+        if(fastResend){//进入拥塞避免阶段
+            ssthresh = ((sendNextID-sendUnAckID)>>1);
+            if(ssthresh<XncpConsts.SSTHRESH_MIN){
+                ssthresh = XncpConsts.SSTHRESH_MIN;
+            }
+            controlSendWindowSize = ssthresh + fastResendCount;//同tcp的实现
+            increase = controlSendWindowSize * getMss();
+        }
+        if(lost){//发生了丢包,慢启动
+            ssthresh = controlSendWindowSize>>1;
+            if(ssthresh<XncpConsts.SSTHRESH_MIN){
+                ssthresh = XncpConsts.SSTHRESH_MIN;
+            }
+            controlSendWindowSize = 1;
+            increase = getMss();
+        }
 
     }
 
