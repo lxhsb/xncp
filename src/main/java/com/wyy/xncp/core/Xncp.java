@@ -33,6 +33,9 @@ public abstract class Xncp {
     private int maxSendCount;//最多发送次数，当一个包发送次数大于这个值时，说明连接不通
     private long ssthresh;//拥塞避免阈值
     private long increase;//拥塞窗口的增长量
+    private long askWindowSizeTimeStamp;//要询问对面接收窗口大小的时间戳
+    private long askWindowSizeInterval;//时间间隔
+    private boolean needAskWindowSize;//需要去询问对面的接收窗口大小
 
 
 
@@ -515,6 +518,38 @@ public abstract class Xncp {
      * 当且仅当满足条件的时候才会发送
      * */
     private void sendAskWindowSize(){
+        if(remoteWindowSize == 0 ){//如果远端窗口为0
+            if(askWindowSizeInterval == 0){
+                askWindowSizeInterval = XncpConsts.DEFALULT_ASK_WINDOW_SIZE_WAITE_TIME;
+                askWindowSizeTimeStamp = currentTime + askWindowSizeInterval;
+            }else {
+                //如果到时间了
+                if(currentTime>=askWindowSizeTimeStamp){
+                    askWindowSizeInterval = askWindowSizeInterval/2;//这点可能会导致爆炸
+                    askWindowSizeTimeStamp = currentTime + askWindowSizeTimeStamp;
+                    needAskWindowSize = true ;
+                }
+            }
+        }else {//说明不需要了
+          //  needAskWindowSize = false;
+           // askWindowSizeTimeStamp = 0 ;
+            askWindowSizeInterval = 0 ;
+            if(needAskWindowSize){//debug用
+                System.out.println("error in 538 , needAskWindowSize could not be true here");
+            }
+        }
+
+        if(needAskWindowSize){//需要发送
+            byte []buffer = getBuffer();
+            DataSegment dataSegment = new DataSegment(0);
+            dataSegment.setConversationID(conversationID);
+            dataSegment.setCommand(XncpConsts.COMMAND_ASK_WINDOW_SIZE);
+            dataSegment.setReceiveWindowSize(getAvaliableReceiveWindowSize());
+            dataSegment.setUnAckID(receiveNextID);
+            int loc = dataSegment.encodeDataSegmentToBuffer(buffer,0);
+            output(buffer,0,loc);
+            needAskWindowSize = false;
+        }
 
     }
 
