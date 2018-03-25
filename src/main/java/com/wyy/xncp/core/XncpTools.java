@@ -78,4 +78,15 @@ public class XncpTools {
     public static boolean isEmpty(byte []buffer){
         return (buffer == null || buffer.length == 0);
     }
+
+    /**
+     * 自己实现一个min和max'，减少对java库的依赖
+     */
+    public static long min(long a ,long b ){
+        return a<b?a:b;
+    }
+
+    public static long max(long a ,long b ){
+        return a>b?a:b;
+    }
 }
