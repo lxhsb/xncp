@@ -26,7 +26,7 @@ public abstract class Xncp {
     private long rto ;//超时重传时间
     private long minRto;//最小超时重传时间
     private long rtt ;//ack接收rtt浮动值
-    private long rttVal;//ack接收rtt静态值
+    private long staticRtt;//ack接收rtt静态值
     private int fastResendCount;//快速重传阈值
     private boolean noDelay;//无延迟模式
     private int xncpState;//整体状态标识
@@ -47,7 +47,7 @@ public abstract class Xncp {
     private LinkedList<DataSegment>receiveBuff = new LinkedList<DataSegment>();//接收缓存，一般指接收窗口
 
     private LinkedList<Long>ackList = new LinkedList<Long>();//接收到的ack，这里暂时先使用链表来实现，缺点是下标访问时的时间复杂度为O（n）
-    private LinkedList<Integer>timeStampList = new LinkedList<Integer>();//接收到的包的时间序列，同上
+    private LinkedList<Long>timeStampList = new LinkedList<Long>();//接收到的包的时间序列，同上
 
 
     public abstract void output(byte[]buffer,int st,int ed);//这个是整个Xncp协议中唯一不实现的地方，在发送时交给用户自己来实现
@@ -385,7 +385,7 @@ public abstract class Xncp {
     /**
      * 接收到了一个包，将对应的时间放入timeStampList中
      * */
-    private void addTimeStamp(int timeStamp){
+    private void addTimeStamp(long timeStamp){
         this.timeStampList.add(timeStamp);
     }
 
@@ -394,8 +394,100 @@ public abstract class Xncp {
     /**
      * 当底层接收到一个包之后调用这个方法
      * 感觉略麻烦，待填
+     * @return -1 传送进的buffer长度太短
+     * @return -2 数据包的conv不一致
+     * @return -3 数据包长度不够
+     * @return -4 command无法识别
      * */
     public int input(byte [] buffer){
+
+        if(buffer.length<XncpConsts.DATASEGMENT_HEADER_SIZE){
+            return -1;
+        }
+        int loc = 0 ;
+        long sUnAckId = sendUnAckID;
+        long remoteTimeStamp,remoteSn,remoteLength,remoteUnAckId,remoteConversationId;
+        int remoteWindowSize;
+        byte remoteCommand,remoteFragmentId;
+        while(true){
+
+            if(loc+XncpConsts.DATASEGMENT_HEADER_SIZE<buffer.length){
+                break;
+            }
+
+            //decode
+            remoteConversationId = XncpTools.decodeUint32(buffer,loc);
+            loc+=4;
+
+            remoteCommand = XncpTools.decodeByte(buffer,loc);
+            loc+=1;
+
+            remoteFragmentId = XncpTools.decodeByte(buffer,loc);
+            loc+=1;
+
+            remoteWindowSize = XncpTools.decodeUInt16(buffer,loc);
+            loc+=2;
+
+            remoteTimeStamp = XncpTools.decodeUint32(buffer,loc);
+            loc+=4;
+
+            remoteSn = XncpTools.decodeUint32(buffer,loc);
+            loc+=4;
+
+            remoteUnAckId = XncpTools.decodeUint32(buffer,loc);
+            loc+=4;
+
+            remoteLength = XncpTools.decodeUint32(buffer,loc);
+            loc+=4;
+
+            if(remoteConversationId != conversationID){
+                return -2;
+            }
+            if(buffer.length-loc<remoteLength){
+                return -3;
+            }
+            if(remoteCommand!=XncpConsts.COMMAND_ACK&&remoteCommand!=XncpConsts.COMMAND_ASK_WINDOW_SIZE&&remoteCommand!=XncpConsts.COMMAND_DATA&&remoteCommand!=XncpConsts.COMMAND_TELL_WINDOW_SIZE){
+                return -4;
+            }
+
+            this.remoteWindowSize = remoteWindowSize;//这重名了
+
+            updateByUnAckID(remoteUnAckId);
+            updateSendUnAckID();
+            if(remoteCommand == XncpConsts.COMMAND_ACK){
+                updateRttAndRto(currentTime-remoteTimeStamp);
+                updateByAckID(remoteSn);
+                updateSendUnAckID();
+            }else if(remoteCommand == XncpConsts.COMMAND_DATA){
+                if(remoteSn<receiveNextID+receiveWindowSize&&remoteSn>=receiveNextID){
+                    addAck(remoteSn);
+                    addTimeStamp(remoteTimeStamp);
+                    DataSegment dataSegment = new DataSegment(buffer,loc,(int)remoteLength);
+                    dataSegment.setConversationID(remoteConversationId);
+                    dataSegment.setCommand(remoteCommand);
+                    dataSegment.setFragmentID(remoteFragmentId);
+                    dataSegment.setReceiveWindowSize(remoteWindowSize);
+                    dataSegment.setTimeStamp(remoteTimeStamp);
+                    dataSegment.setSn(remoteSn);
+
+                    handleDataSegment(dataSegment);
+
+
+                }
+
+            }else if(remoteCommand == XncpConsts.COMMAND_ASK_WINDOW_SIZE){
+
+                needSendReceiveWindowSize = true;
+            }
+            loc+=remoteLength;
+        }
+
+
+
+
+
+
+
         return 0;
     }
 
@@ -667,6 +759,29 @@ public abstract class Xncp {
             controlSendWindowSize = 1;
             increase = getMss();
         }
+
+    }
+
+
+    /**
+     * 更新rtt和rto
+     * 这里的实现与tcp一样
+     * https://tools.ietf.org/html/rfc6298
+     * */
+    private void updateRttAndRto(long segmentRtt){
+
+        if(staticRtt == 0 ){//如果是第一次更新
+            staticRtt = segmentRtt;
+            rtt = segmentRtt>>1;
+        }
+        else {
+            long tmp = XncpTools.abs(segmentRtt-staticRtt);
+            rtt = (3*rtt+tmp)>>2;
+            staticRtt = (7*staticRtt+segmentRtt)>>3;
+            staticRtt = XncpTools.max(segmentRtt,1);
+        }
+        long tmpRto = (staticRtt+XncpTools.max(1,rtt<<2));
+        rto = XncpTools.min(XncpTools.max(minRto,tmpRto),XncpConsts.RTO_MAX);
 
     }
 
