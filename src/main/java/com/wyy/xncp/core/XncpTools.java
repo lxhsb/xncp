@@ -89,4 +89,10 @@ public class XncpTools {
     public static long max(long a ,long b ){
         return a>b?a:b;
     }
+    /**
+     * 实现一个求绝对值的函数
+     * */
+    public static long abs(long num){
+        return num>0?num:-num;
+    }
 }
