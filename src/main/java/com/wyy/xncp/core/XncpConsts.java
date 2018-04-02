@@ -13,6 +13,9 @@ public class XncpConsts {
     public static byte COMMAND_ASK_WINDOW_SIZE = 3;//主动询问对面的窗口大小
     public static long SSTHRESH_MIN = 2;
     public static long DEFALULT_ASK_WINDOW_SIZE_WAITE_TIME = 10000;//ms
+    public static long RTO_MAX = 50000;
+    public static long RTO_MIN = 100;
+    public static long RTO_DEFAULT = 200;
 
 
 }
