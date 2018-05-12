@@ -799,10 +799,21 @@ public abstract class Xncp {
 
     }
 
-
-
-
-
-
+    /**
+     * 需要由使用者循环调用的update的方法
+     * 主要驱动方法，需要使用者
+     * */
+    public void update(long currentTime){
+        this.currentTime = currentTime;
+        try {
+            flushAck();
+        }catch ( Exception e ){
+            e.printStackTrace();
+        }
+        sendAskWindowSize();
+        sendWindowSize();
+        updateSend();
+        flushSendBuffer();
+    }
 
 }
