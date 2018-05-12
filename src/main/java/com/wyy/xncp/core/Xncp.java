@@ -21,7 +21,7 @@ public abstract class Xncp {
     private long sendNextID;//下一个待发送的包的序号、
     private long remoteWindowSize;
     private boolean neendControl;//需要拥塞控制
-    private long controlSendWindowSize ; //拥塞控制时的窗口大小
+    private long congestionWindow; //拥塞控制时的窗口大小
     private long currentTime;//现在时间
     private long rto ;//超时重传时间
     private long minRto;//最小超时重传时间
@@ -393,7 +393,6 @@ public abstract class Xncp {
 
     /**
      * 当底层接收到一个包之后调用这个方法
-     * 感觉略麻烦，待填
      * @return -1 传送进的buffer长度太短
      * @return -2 数据包的conv不一致
      * @return -3 数据包长度不够
@@ -483,17 +482,32 @@ public abstract class Xncp {
         }
 
 
-
-
-
-
-
+        if(sUnAckId<sendUnAckID){//说明接收到了包
+            if(congestionWindow <this.remoteWindowSize){
+                    long mss_ = mss;
+                    if (congestionWindow < ssthresh) {
+                        congestionWindow++;
+                        increase += mss_;
+                    } else {
+                        if (increase < mss_) {
+                            increase = mss_;
+                        }
+                        increase += (mss_ * mss_) / increase + (mss_ / 16);
+                        if ((congestionWindow + 1) * mss_ <= increase) {
+                            congestionWindow++;
+                        }
+                    }
+                    if (congestionWindow > this.remoteWindowSize) {
+                        congestionWindow = this.remoteWindowSize;
+                        increase = this.remoteWindowSize * mss_;
+                    }
+            }
+        }
         return 0;
     }
 
     /**
      * 底层收包之后调用这个方法，更新相应的信息
-     * todo  可能会有bug，待测试！！！！！！
      * */
 
     private void handleDataSegment(DataSegment dataSegment){
@@ -651,7 +665,7 @@ public abstract class Xncp {
     private void updateSend(){
         long size  = Math.min(sendWindowSize,remoteWindowSize);
         if(neendControl){
-            size = Math.min(size,controlSendWindowSize);
+            size = Math.min(size, congestionWindow);
         }
         int cnt = 0 ;
         for(DataSegment dataSegment:sendQueue){
@@ -702,7 +716,7 @@ public abstract class Xncp {
                 //超时重传,或者丢包
                 flag = true;
                 dataSegment.increaseSendCount();
-                dataSegment.setRto(noDelay?dataSegment.getRto()+minRto/2:dataSegment.getRto()+minRto);
+                dataSegment.setRto(noDelay?dataSegment.getRto()+rto/2:dataSegment.getRto()+rto);
                 dataSegment.setResendTimeStamp(currentTime+dataSegment.getRto());
                 lost = true;
             }else if(dataSegment.getJumpCount()>=realFastResendCount){
@@ -748,15 +762,15 @@ public abstract class Xncp {
             if(ssthresh<XncpConsts.SSTHRESH_MIN){
                 ssthresh = XncpConsts.SSTHRESH_MIN;
             }
-            controlSendWindowSize = ssthresh + fastResendCount;//同tcp的实现
-            increase = controlSendWindowSize * getMss();
+            congestionWindow = ssthresh + fastResendCount;//同tcp的实现
+            increase = congestionWindow * getMss();
         }
         if(lost){//发生了丢包,慢启动
-            ssthresh = controlSendWindowSize>>1;
+            ssthresh = congestionWindow >>1;
             if(ssthresh<XncpConsts.SSTHRESH_MIN){
                 ssthresh = XncpConsts.SSTHRESH_MIN;
             }
-            controlSendWindowSize = 1;
+            congestionWindow = 1;
             increase = getMss();
         }
 
